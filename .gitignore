@@ -1,0 +1,14 @@
+# Entorno virtual
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Archivos temporales de sistema e IDEs
+.vscode/
+.idea/
+
+# Datos pesados y logs
+*.mp4
+*.avi
+runs/

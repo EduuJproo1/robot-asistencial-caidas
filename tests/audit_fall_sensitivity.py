@@ -1,16 +1,16 @@
 """
 Auditoría de Sensibilidad (Recall) sobre Caídas Reales.
-Verifica que el verificador postural y la FSM no introduzcan falsos negativos (FN).
+Sincronizado con DetectorConfig y FallDetector v6.
 """
 
 from pathlib import Path
 import random
 import time
 import cv2
-import numpy as np
 import pandas as pd
 
-from src.fall_detector import FallDetector, FallState
+from src.detector_config import DetectorConfig
+from src.fall_detector import FallDetector, FallState, Posture
 
 
 def run_fall_audit(sample_size: int = 50, seed: int = 42):
@@ -31,12 +31,17 @@ def run_fall_audit(sample_size: int = 50, seed: int = 42):
     print(f"🎯 Muestra objetivo: {sample_size} caídas representativas")
     print("=" * 70 + "\n")
 
-    detector = FallDetector(
-        model_path="models/fall_detection_transformer.tflite",
-        fall_confidence_threshold=0.85,
+    # Inyección de configuración centralizada
+    config = DetectorConfig(
+        tflite_conf_threshold=0.85,
         confirmation_time_sec=0.8,
         torso_angle_threshold=40.0,
         aspect_ratio_threshold=0.85
+    )
+
+    detector = FallDetector(
+        model_path="models/fall_detection_transformer.tflite",
+        config=config
     )
 
     results = []
@@ -50,7 +55,7 @@ def run_fall_audit(sample_size: int = 50, seed: int = 42):
         cap = cv2.VideoCapture(str(v_path))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        # Omitir clips corruptos o menores a 35 frames (1 segundo)
+        # Omitir clips truncados menores a 35 frames (~1 segundo)
         if total_frames < 35:
             cap.release()
             continue
@@ -63,6 +68,7 @@ def run_fall_audit(sample_size: int = 50, seed: int = 42):
         max_tflite = 0.0
         min_torso = 90.0
         was_confirming = False
+        was_grounded = False
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -76,6 +82,8 @@ def run_fall_audit(sample_size: int = 50, seed: int = 42):
                 max_tflite = res.fall_confidence
             if res.torso_angle < min_torso:
                 min_torso = res.torso_angle
+            if res.posture == Posture.GROUND or res.is_grounded:
+                was_grounded = True
             if res.state == FallState.CONFIRMANDO:
                 was_confirming = True
             if res.state == FallState.CAIDA_CONFIRMADA:
@@ -84,9 +92,9 @@ def run_fall_audit(sample_size: int = 50, seed: int = 42):
         cap.release()
         detector.reset()
 
-        # En videos cortos de dataset, si el video terminó mientras estaba en el suelo confirmando,
+        # En clips cortos de dataset, si el archivo terminó mientras estaba confirmando en suelo,
         # en un flujo continuo de robot habría confirmado:
-        confirmed_or_grounded = fall_detected or (was_confirming and min_torso <= 40.0)
+        confirmed_or_grounded = fall_detected or (was_confirming and was_grounded)
 
         status = "✅ CAÍDA DETECTADA (TP)" if confirmed_or_grounded else "❌ NO DETECTADA (FN)"
         results.append({

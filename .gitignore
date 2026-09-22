@@ -12,3 +12,7 @@ __pycache__/
 *.mp4
 *.avi
 runs/
+
+# Configuración de entorno
+.env
+evidences/

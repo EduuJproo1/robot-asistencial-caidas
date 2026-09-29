@@ -16,3 +16,6 @@ runs/
 # Configuración de entorno
 .env
 evidences/
+
+# Modelos de Vosk
+vosk-model-es/

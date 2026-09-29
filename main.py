@@ -1,6 +1,6 @@
 """
 Punto de Entrada Principal (Main Pipeline) del Sistema de Detección y Guiado.
-Integra FallDetector (Visión + Cinemática + Telemetría de Navegación) con AlertManager (.env).
+Integra Visión (FallDetector), Alertas (AlertManager) y Voz (VoiceManager).
 """
 
 import argparse
@@ -15,6 +15,7 @@ import numpy as np
 from src.fall_detector import FallDetector, FallState, Posture
 from src.alert_manager import AlertManager
 from src.detector_config import DetectorConfig
+from src.voice_manager import VoiceManager, VoiceCommand
 
 load_dotenv()
 
@@ -94,7 +95,7 @@ def draw_hud_and_telemetry(frame: np.ndarray, result, fps: float, confirm_sec: f
         cv2.circle(frame, (cx, cy), 6, (0, 255, 255), -1, cv2.LINE_AA)
         cv2.circle(frame, (cx, cy), 12, (0, 255, 255), 2, cv2.LINE_AA)
 
-        # Barra inferior en ASCII puro (elimina errores de codificación '??')
+        # Barra inferior
         cv2.rectangle(frame, (0, h - 35), (w, h), (15, 18, 22), -1)
         direction = "HORARIO (D)" if nav.bearing_deg > 0 else "ANTIHORARIO (I)"
         if abs(nav.bearing_deg) < 3.0:
@@ -144,10 +145,14 @@ def run_pipeline(source):
         evidence_dir="evidences"
     )
 
+    voice_mgr = VoiceManager(model_path="models/vosk-model-es")
+    voice_mgr.start()
+
     print("\n" + "=" * 65)
-    print("🚀 PIPELINE ROBÓTICO: Detección + Alertas + Telemetría de Navegación")
+    print("🚀 PIPELINE ROBÓTICO: Detección Visual + Alertas + Control por Voz")
     print(f"📹 Origen: {'Webcam (' + str(source) + ')' if is_webcam else Path(source).name}")
     print(f"🤖 Despacho Telegram: {'CONFIGURADO (.env)' if alert_mgr.bot_token else 'DESACTIVADO'}")
+    print("🎙️ Interacción de Voz: INICIANDO EN SEGUNDO PLANO")
     print("Controles: 'Q' o 'ESC' para salir | 'R' para resetear")
     print("=" * 65 + "\n")
 
@@ -163,11 +168,42 @@ def run_pipeline(source):
             fps = 1.0 / max(now - prev_time, 1e-4)
             prev_time = now
 
+            # 1. Monitoreo de comandos de voz no-bloqueante
+            voice_cmd = voice_mgr.get_latest_command()
+            
+            if voice_cmd == VoiceCommand.CANCELAR:
+                print("🛑 [Interrupción por Voz] Comando de CANCELACIÓN recibido. Reseteando cámara.")
+                
+                # Despachar aviso a Telegram solo si el sistema estaba en estado de alerta
+                if result.state in (FallState.CONFIRMANDO, FallState.CAIDA_CONFIRMADA):
+                    msg_cancel = (
+                        "✅ *ALERTA CANCELADA*\n"
+                        "El usuario ha confirmado por voz que se encuentra bien.\n"
+                        "No se requiere asistencia."
+                    )
+                    # Forzamos el envío de texto sin foto usando el pool asíncrono
+                    alert_mgr._executor.submit(alert_mgr._send_telegram_worker, msg_cancel, None)
+                
+                detector.reset()
+            
+            elif voice_cmd == VoiceCommand.EMERGENCIA:
+                print("🚨 [Interrupción por Voz] Comando de AYUDA recibido. Forzando alerta.")
+                # Disparo inmediato sin importar la cámara
+                alert_mgr.trigger_fall_alert(
+                    frame_bgr=frame,
+                    fall_confidence=1.0,
+                    torso_angle=0.0,
+                    time_in_fall=0.0,
+                    emergency_by_voice=True
+                )
+
+            # 2. Procesamiento de Visión
             result = detector.process_frame(frame, current_timestamp=now)
 
             annotated = draw_punpayut_landmarks(frame.copy(), result.pose_landmarks)
             display_frame = draw_hud_and_telemetry(annotated, result, fps, detector.cfg.confirmation_time_sec)
 
+            # 3. Disparo de Alerta Visual
             if result.state == FallState.CAIDA_CONFIRMADA:
                 alert_mgr.trigger_fall_alert(
                     frame_bgr=display_frame,
@@ -183,13 +219,13 @@ def run_pipeline(source):
                 break
             elif key == ord('r'):
                 detector.reset()
-                print("🔄 FSM reseteada a NORMAL.")
+                print("🔄 FSM reseteada a NORMAL desde teclado.")
     finally:
-        # Se garantiza liberación de cámara/ventanas y apagado ordenado del pool
-        # de despacho de alertas incluso ante una excepción o un break temprano.
+        print("\nApagando sistema de forma segura...")
         cap.release()
         cv2.destroyAllWindows()
         alert_mgr.shutdown()
+        voice_mgr.stop()
 
 
 if __name__ == "__main__":

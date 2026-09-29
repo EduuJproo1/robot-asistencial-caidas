@@ -96,6 +96,7 @@ class AlertManager:
         fall_confidence: float,
         torso_angle: float,
         time_in_fall: float,
+        emergency_by_voice: bool = False,
     ) -> bool:
         """
         Dispara una alerta de emergencia si transcurrió el tiempo de enfriamiento.
@@ -123,6 +124,11 @@ class AlertManager:
             f"⏱️ *Tiempo en el Suelo:* `{time_in_fall:.1f} s`\n\n"
             "⚠️ _El robot asistencial solicita verificación inmediata._"
         )
+
+        if emergency_by_voice:
+            message += (
+                "\n\n🗣️ *El usuario indicó una emergencia mediante un comando de voz.*"
+            )
 
         print(f"\n📢 [AlertManager] ¡EMERGENCIA EMITIDA! Evidencia guardada en: {image_filename.name}")
 

@@ -1,24 +1,16 @@
 """
-Módulo de Detección de Caídas y Telemetría de Navegación (v6 - Refactorizado).
+Módulo de detección de caídas y generación de telemetría visual.
 
 Integra:
-1. Inferencia TFLite Spatial-Temporal Transformer (disparador cinemático).
-2. Filtro temporal pasa-bajos (EMA) para estabilizar keypoints, postura y
-   telemetría de navegación (una sola implementación reutilizada, no cuatro
-   bloques de suavizado copiados).
-3. Verificación Postural Geométrica (torso 2D, colapso de altura, aspect
-   ratio) -> clasificación discreta de Postura (de pie / suelo / sentado
-   estable / ambigua). Se eliminó la corrección "3D" basada en el eje z de
-   MediaPipe (min(ángulo_2D, ángulo_3D) con peso 0.5 sobre dz): el eje z es
-   un proxy de profundidad sin escala métrica confiable en monocular/CPU, y
-   no se validó mediante ablation que aportara recall/precisión adicional.
-4. FSM con histéresis temporal, timeout de escape para posturas ambiguas
-   (evita el deadlock de quedar en CONFIRMANDO indefinidamente) y
-   recuperación por bipedestación O postura sentada estable.
-5. Telemetría de guiado para la base móvil: azimut por proyección pinhole
-   real (HFOV -> foco en píxeles + atan2) y distancia estimada por altura
-   antropométrica, ambos suavizados por EMA para no producir comandos de
-   movimiento con jitter frame a frame.
+1. Inferencia temporal mediante el modelo TFLite seleccionado en la Etapa 1.
+2. Análisis geométrico de postura a partir de landmarks de MediaPipe Pose.
+3. Suavizado EMA de métricas posturales y de navegación.
+4. Máquina de estados para confirmación, descarte y recuperación de caídas.
+5. Estimación de orientación y distancia para el futuro control de la base móvil.
+
+La coordenada z de MediaPipe se utiliza únicamente como información de
+profundidad relativa para complementar el cálculo geométrico del torso; no
+se interpreta como una distancia métrica.
 """
 
 from collections import deque
@@ -77,10 +69,9 @@ def _robust_midpoint(
     min_confidence: float,
 ) -> Tuple[float, float, bool]:
     """
-    Punto medio de dos landmarks, degradando a un solo punto si el otro no
-    es visible. Único helper usado tanto en la normalización de esqueleto
-    (entrada del Transformer) como en el cálculo de métricas geométricas,
-    reemplazando dos implementaciones duplicadas que antes podían divergir.
+    Calcula el punto medio robusto de dos landmarks visibles.
+    Si solo uno supera el umbral mínimo de visibilidad, utiliza dicho punto
+    como aproximación.
     """
     valid_a = ac > min_confidence
     valid_b = bc > min_confidence
@@ -107,6 +98,7 @@ class ExponentialMovingAverage:
         return self._value
 
     def reset(self) -> None:
+        """Restablece el valor de una instancia de EMA"""
         self._value = None
 
     def update(self, sample: float) -> float:
@@ -118,6 +110,7 @@ class ExponentialMovingAverage:
 
 
 class FallState(Enum):
+    """Estados posibles de la máquina de confirmación de caídas."""
     NORMAL = auto()
     CONFIRMANDO = auto()
     CAIDA_CONFIRMADA = auto()
@@ -133,6 +126,12 @@ class Posture(Enum):
 
 @dataclass
 class NavigationTelemetry:
+    """
+    Estima la orientación relativa y distancia aproximada de la persona.
+
+    La distancia es una aproximación monocular y se actualiza solamente cuando
+    la persona se encuentra en una postura compatible con bipedestación.
+    """
     target_center_px: Tuple[int, int]
     bearing_deg: float           # Azimut respecto al eje óptico (proyección pinhole). + = derecha
     estimated_distance_m: float  # Distancia aproximada objetivo-cámara (m); válida sobre todo de pie
@@ -141,6 +140,12 @@ class NavigationTelemetry:
 
 @dataclass
 class DetectionResult:
+    """
+    Resultado generado por FallDetector para un frame procesado.
+
+    Agrupa el estado de detección, métricas posturales, presencia de la
+    persona, telemetría de navegación y landmarks estimados.
+    """
     state: FallState
     posture: Posture
     fall_confidence: float
@@ -156,6 +161,12 @@ class DetectionResult:
 
 
 class FallDetector:
+    """
+    Integra inferencia TFLite, análisis geométrico y una FSM para detectar caídas.
+
+    Cada frame produce un DetectionResult que contiene el estado del detector,
+    métricas posturales y telemetría visual para el futuro subsistema de movilidad.
+    """
     def __init__(
         self,
         model_path: str = "models/fall_detection_transformer.tflite",
@@ -488,6 +499,12 @@ class FallDetector:
     def process_frame(
         self, frame_bgr: np.ndarray, current_timestamp: Optional[float] = None,
     ) -> DetectionResult:
+        """
+        Procesa un frame y retorna el estado completo del detector.
+
+        Incluye inferencia temporal, cálculo geométrico, actualización de la FSM
+        y generación de telemetría visual.
+        """
         if current_timestamp is None:
             current_timestamp = time.monotonic()
 

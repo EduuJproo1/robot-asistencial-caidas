@@ -18,12 +18,19 @@ from vosk import Model, KaldiRecognizer, SetLogLevel
 SetLogLevel(-1)
 
 class VoiceCommand(Enum):
+    """Comandos de voz que VoiceManager puede comunicar al pipeline."""
     EMERGENCIA = auto()
     CANCELAR = auto()
     DESCONOCIDO = auto()
 
 
 class VoiceManager:
+    """
+    Gestiona reconocimiento de voz local mediante Vosk.
+
+    La captura y el reconocimiento se ejecutan en un hilo secundario y los
+    comandos identificados se comunican al pipeline mediante una cola thread-safe.
+    """
     # Diccionarios de palabras clave (Keywords)
     KEYWORDS_EMERGENCIA = {"ayuda", "emergencia", "socorro", "llamar", "auxilio"}
     KEYWORDS_CANCELACION = {"estoy bien", "falsa alarma", "cancelar", "detente", "me equivoque"}
@@ -68,10 +75,10 @@ class VoiceManager:
         if self.audio_interface:
             self.audio_interface.terminate()
 
-    def get_latest_command(self) -> Optional[VoiceCommand]:
+    def get_next_command(self) -> Optional[VoiceCommand]:
         """
-        Extrae el último comando de la cola de forma no bloqueante.
-        Retorna None si no hay comandos pendientes.
+        Extrae el siguiente comando pendiente de forma no bloqueante.
+        Retorna None cuando la cola está vacía.
         """
         try:
             return self.command_queue.get_nowait()

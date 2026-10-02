@@ -1,8 +1,8 @@
 """
-Configuración Paramétrica del Subsistema de Detección de Caídas.
-Centraliza TODO umbral con efecto en la lógica de decisión: no debe haber
-constantes numéricas sueltas ("números mágicos") en el resto del código
-de producción. Si un valor influye en una decisión, vive aquí, documentado.
+Define los parámetros por defecto del subsistema de detección.
+
+Los valores pueden ser sobreescritos explícitamente al construir
+DetectorConfig para una ejecución o experimento determinado.
 """
 
 from dataclasses import dataclass
@@ -10,11 +10,17 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class DetectorConfig:
+    """
+    Configuración centralizada del detector de caídas.
+
+    Los valores definidos aquí controlan los umbrales geométricos,
+    temporización de la FSM, suavizado y parámetros de cámara.
+    """
     # 1. Parámetros Cinemáticos (Transformer TFLite)
     tflite_conf_threshold: float = 0.85      # Sensibilidad para capturar caídas amortiguadas
     feature_window_size: int = 30            # Fotogramas de entrada (1.0 s a 30 FPS)
 
-    # 2. Umbrales Geométricos (Dataset Punpayut, calibrados en set de validación)
+    # 2. Umbrales geométricos obtenidos mediante calibración preliminar
     torso_angle_threshold: float = 40.0      # Ángulo torso-suelo (°). <= => torso horizontal (suelo)
     aspect_ratio_threshold: float = 0.85     # Bounding box ancho/alto. >= => silueta horizontal
     min_keypoint_confidence: float = 0.25    # Filtro de visibilidad MediaPipe

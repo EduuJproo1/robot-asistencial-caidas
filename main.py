@@ -39,6 +39,7 @@ _POSTURE_COLORS = {
 
 
 def draw_punpayut_landmarks(frame: np.ndarray, landmarks) -> np.ndarray:
+    """Dibuja sobre el frame los landmarks y conexiones estimados por MediaPipe Pose."""
     if not landmarks:
         return frame
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -52,6 +53,12 @@ def draw_punpayut_landmarks(frame: np.ndarray, landmarks) -> np.ndarray:
 
 
 def draw_hud_and_telemetry(frame: np.ndarray, result, fps: float, confirm_sec: float) -> np.ndarray:
+    """
+    Superpone sobre el frame el estado del detector y la telemetría visual.
+
+    Muestra el estado de la FSM, confianza TFLite, postura, métricas geométricas
+    y, cuando está disponible, la orientación y distancia estimadas del objetivo.
+    """
     h, w = frame.shape[:2]
     overlay = frame.copy()
 
@@ -119,6 +126,13 @@ def draw_hud_and_telemetry(frame: np.ndarray, result, fps: float, confirm_sec: f
 
 
 def run_pipeline(source):
+    """
+    Ejecuta el pipeline integrado de visión, voz y alertas.
+
+    La fuente puede corresponder a una webcam o a un archivo de video.
+    El ciclo principal procesa comandos de voz, ejecuta el detector y genera
+    alertas cuando corresponde.
+    """
     is_webcam = str(source).isdigit() or source == "0"
     cap = cv2.VideoCapture(int(source) if is_webcam else source)
 
@@ -170,7 +184,7 @@ def run_pipeline(source):
             prev_time = now
 
             # 1. Monitoreo de comandos de voz no-bloqueante
-            voice_cmd = voice_mgr.get_latest_command()
+            voice_cmd = voice_mgr.get_next_command()
             
             if voice_cmd == VoiceCommand.CANCELAR:
                 print("🛑 [Interrupción por Voz] Comando de CANCELACIÓN recibido.")

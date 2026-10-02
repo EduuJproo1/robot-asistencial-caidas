@@ -17,6 +17,7 @@ import requests
 
 class AlertManager:
     """
+    Gestiona la generación, persistencia y despacho remoto de alertas de emergencia.
     Concurrencia: el cooldown se protege con un lock explícito para evitar una
     condición de carrera check-then-act sobre `_last_alert_time` si en el
     futuro `trigger_fall_alert` se invoca desde más de un hilo (p. ej. soporte
@@ -115,19 +116,22 @@ class AlertManager:
         image_filename = self.evidence_path / f"fall_{timestamp_str}.jpg"
         cv2.imwrite(str(image_filename), frame_bgr)
 
-        # 2. Estructurar mensaje
-        message = (
-            "🚨 *ALERTA CRÍTICA: CAÍDA CONFIRMADA*\n\n"
-            f"📅 *Hora:* `{datetime.now().strftime('%H:%M:%S')}`\n"
-            f"🎯 *Certeza del Impacto:* `{fall_confidence * 100:.1f}%`\n"
-            f"📐 *Inclinación del Torso:* `{torso_angle:.1f}°`\n"
-            f"⏱️ *Tiempo en el Suelo:* `{time_in_fall:.1f} s`\n\n"
-            "⚠️ _El robot asistencial solicita verificación inmediata._"
-        )
-
+        # 2. Estructurar mensaje según el origen de la alerta
         if emergency_by_voice:
-            message += (
-                "\n\n🗣️ *El usuario indicó una emergencia mediante un comando de voz.*"
+            message = (
+                "🚨 *SOLICITUD DE EMERGENCIA POR VOZ*\n\n"
+                f"📅 *Hora:* `{datetime.now().strftime('%H:%M:%S')}`\n"
+                "🗣️ *El usuario solicitó asistencia mediante un comando de voz.*\n\n"
+                "⚠️ _Se recomienda verificar su estado._"
+            )
+        else:
+            message = (
+                "🚨 *ALERTA CRÍTICA: CAÍDA CONFIRMADA*\n\n"
+                f"📅 *Hora:* `{datetime.now().strftime('%H:%M:%S')}`\n"
+                f"🎯 *Certeza del Impacto:* `{fall_confidence * 100:.1f}%`\n"
+                f"📐 *Inclinación del Torso:* `{torso_angle:.1f}°`\n"
+                f"⏱️ *Tiempo en el Suelo:* `{time_in_fall:.1f} s`\n\n"
+                "⚠️ _El robot asistencial solicita verificación inmediata._"
             )
 
         print(f"\n📢 [AlertManager] ¡EMERGENCIA EMITIDA! Evidencia guardada en: {image_filename.name}")

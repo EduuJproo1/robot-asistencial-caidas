@@ -11,7 +11,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class DetectorConfig:
     # 1. Parámetros Cinemáticos (Transformer TFLite)
-    tflite_conf_threshold: float = 0.80      # Sensibilidad para capturar caídas amortiguadas
+    tflite_conf_threshold: float = 0.85      # Sensibilidad para capturar caídas amortiguadas
     feature_window_size: int = 30            # Fotogramas de entrada (1.0 s a 30 FPS)
 
     # 2. Umbrales Geométricos (Dataset Punpayut, calibrados en set de validación)

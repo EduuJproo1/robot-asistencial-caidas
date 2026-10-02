@@ -159,6 +159,7 @@ def run_pipeline(source):
     prev_time = time.monotonic()
 
     try:
+        result = None
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret or frame is None:
@@ -172,18 +173,23 @@ def run_pipeline(source):
             voice_cmd = voice_mgr.get_latest_command()
             
             if voice_cmd == VoiceCommand.CANCELAR:
-                print("🛑 [Interrupción por Voz] Comando de CANCELACIÓN recibido. Reseteando cámara.")
-                
-                # Despachar aviso a Telegram solo si el sistema estaba en estado de alerta
-                if result.state in (FallState.CONFIRMANDO, FallState.CAIDA_CONFIRMADA):
+                print("🛑 [Interrupción por Voz] Comando de CANCELACIÓN recibido.")
+
+                if (
+                    result is not None
+                    and result.state in (FallState.CONFIRMANDO, FallState.CAIDA_CONFIRMADA)
+                ):
                     msg_cancel = (
                         "✅ *ALERTA CANCELADA*\n"
                         "El usuario ha confirmado por voz que se encuentra bien.\n"
                         "No se requiere asistencia."
                     )
-                    # Forzamos el envío de texto sin foto usando el pool asíncrono
-                    alert_mgr._executor.submit(alert_mgr._send_telegram_worker, msg_cancel, None)
-                
+                    alert_mgr._executor.submit(
+                        alert_mgr._send_telegram_worker,
+                        msg_cancel,
+                        None
+                    )
+
                 detector.reset()
             
             elif voice_cmd == VoiceCommand.EMERGENCIA:

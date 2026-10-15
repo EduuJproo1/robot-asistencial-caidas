@@ -10,6 +10,7 @@ import threading
 from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
+import unicodedata
 
 import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
@@ -131,13 +132,26 @@ class VoiceManager:
                 if text:
                     self._process_text(text)
 
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        return "".join(
+            c for c in unicodedata.normalize("NFD", text.casefold())
+            if unicodedata.category(c) != "Mn"
+        ).strip()
+
     def _process_text(self, text: str) -> None:
-        """Clasifica el texto reconocido y encola el comando correspondiente."""
-        # Se busca si alguna palabra clave está contenida en la frase escuchada
-        if any(kw in text for kw in self.KEYWORDS_EMERGENCIA):
+        normalized = self._normalize_text(text)
+
+        if any(
+            self._normalize_text(kw) in normalized
+            for kw in self.KEYWORDS_EMERGENCIA
+        ):
             print(f"\n🗣️ [VoiceManager] Frase: '{text}' -> DISPARA EMERGENCIA")
             self.command_queue.put(VoiceCommand.EMERGENCIA)
-        
-        elif any(kw in text for kw in self.KEYWORDS_CANCELACION):
+
+        elif any(
+            self._normalize_text(kw) in normalized
+            for kw in self.KEYWORDS_CANCELACION
+        ):
             print(f"\n🗣️ [VoiceManager] Frase: '{text}' -> DISPARA CANCELACIÓN")
             self.command_queue.put(VoiceCommand.CANCELAR)

@@ -23,20 +23,20 @@ from typing import Dict, Optional, Tuple
 
 import cv2
 import mediapipe as mp
-from mediapipe.framework.formats import landmark_pb2
 import numpy as np
-import tensorflow as tf
+
+from types import SimpleNamespace
+from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
+from ai_edge_litert.interpreter import Interpreter
 
 from src.detector_config import DetectorConfig
-
-Interpreter = tf.lite.Interpreter
 
 # --------------------------------------------------------------------------- #
 # Esquema de keypoints — fijo para MediaPipe Pose (17 puntos). Se calcula una
 # única vez a nivel de módulo: no hay razón para reconstruir este mapeo por
 # cada instancia de FallDetector.
 # --------------------------------------------------------------------------- #
-_POSE_LANDMARK = mp.solutions.pose.PoseLandmark
+_POSE_LANDMARK = PoseLandmark
 
 _LANDMARK_ENUM_TO_NAME: Dict[int, str] = {
     _POSE_LANDMARK.NOSE: "Nose",
@@ -157,7 +157,7 @@ class DetectionResult:
     time_in_fall: float
     person_detected: bool
     telemetry: NavigationTelemetry
-    pose_landmarks: Optional[landmark_pb2.NormalizedLandmarkList] = None
+    pose_landmarks: Optional[SimpleNamespace] = None
 
 
 class FallDetector:
@@ -171,6 +171,7 @@ class FallDetector:
         self,
         model_path: str = "models/fall_detection_transformer.tflite",
         config: Optional[DetectorConfig] = None,
+        pose_model_path: str = "models/pose_landmarker_full.task",
     ) -> None:
         self.cfg = config or DetectorConfig()
 
@@ -181,19 +182,34 @@ class FallDetector:
         with open(resolved_path, "rb") as f:
             model_bytes = f.read()
 
-        self.interpreter = Interpreter(model_content=model_bytes)
+        self.interpreter = Interpreter(model_content=model_bytes, num_threads=2)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
 
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            smooth_landmarks=True,
-            min_detection_confidence=0.5,
+        task_path = Path(pose_model_path).resolve()
+
+        if not task_path.is_file():
+            raise FileNotFoundError(
+                f"No se encontró el modelo de postura en: {task_path}"
+            )
+
+        options = mp.tasks.vision.PoseLandmarkerOptions(
+            base_options=mp.tasks.BaseOptions(
+                model_asset_path=str(task_path)
+            ),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_poses=1,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
         )
+
+        self.pose = mp.tasks.vision.PoseLandmarker.create_from_options(
+            options
+        )
+
+        self._last_pose_timestamp_ms = -1
 
         self.feature_sequence: deque = deque(maxlen=self.cfg.feature_window_size)
         self.state = FallState.NORMAL
@@ -509,16 +525,40 @@ class FallDetector:
             current_timestamp = time.monotonic()
 
         h, w, _ = frame_bgr.shape
-        img_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        img_rgb.flags.writeable = False
-        results = self.pose.process(img_rgb)
+
+        img_rgb = np.ascontiguousarray(
+            cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        )
+
+        mp_image = mp.Image(
+            image_format=mp.ImageFormat.SRGB,
+            data=img_rgb
+        )
+
+        timestamp_ms = max(
+            int(current_timestamp * 1000),
+            self._last_pose_timestamp_ms + 1
+        )
+
+        self._last_pose_timestamp_ms = timestamp_ms
+
+        task_result = self.pose.detect_for_video(
+            mp_image,
+            timestamp_ms
+        )
+
+        pose_landmarks = (
+            SimpleNamespace(landmark=task_result.pose_landmarks[0])
+            if task_result.pose_landmarks
+            else None
+        )
 
         frame_features = np.zeros(FEATURE_DIM, dtype=np.float32)
-        person_detected = bool(results.pose_landmarks)
+        person_detected = pose_landmarks is not None
 
         if person_detected:
             for mp_enum, name in _LANDMARK_ENUM_TO_NAME.items():
-                lm = results.pose_landmarks.landmark[mp_enum.value]
+                lm = pose_landmarks.landmark[mp_enum.value]
                 idx = KPT_INDEX[name] * 3
                 frame_features[idx] = lm.x
                 frame_features[idx + 1] = lm.y
@@ -536,7 +576,7 @@ class FallDetector:
 
         raw_fall_detected = prob_caida >= self.cfg.tflite_conf_threshold
         torso_angle, aspect_ratio, posture, telemetry = self._compute_metrics(
-            results.pose_landmarks, frame_w=w, frame_h=h
+            pose_landmarks, frame_w=w, frame_h=h
         )
 
         time_in_fall = self._update_fsm(raw_fall_detected, posture, person_detected, current_timestamp, prob_caida)
@@ -560,7 +600,7 @@ class FallDetector:
             time_in_fall=time_in_fall,
             person_detected=person_detected,
             telemetry=telemetry,
-            pose_landmarks=results.pose_landmarks,
+            pose_landmarks=pose_landmarks,
         )
 
     def reset(self) -> None:
@@ -574,3 +614,7 @@ class FallDetector:
         self.ema_aspect_ratio.reset()
         self.ema_bearing.reset()
         self.ema_distance.reset()
+
+    def close(self) -> None:
+        """Libera los recursos del estimador de postura."""
+        self.pose.close()

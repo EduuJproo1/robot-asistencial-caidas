@@ -19,9 +19,11 @@ from src.voice_manager import VoiceManager, VoiceCommand
 
 load_dotenv()
 
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-mp_pose = mp.solutions.pose
+mp_drawing = mp.tasks.vision.drawing_utils
+mp_drawing_styles = mp.tasks.vision.drawing_styles
+mp_pose_connections = (
+    mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
+)
 
 _POSTURE_LABELS = {
     Posture.STANDING: "VERTICAL / ERGUIDO",
@@ -38,18 +40,25 @@ _POSTURE_COLORS = {
 }
 
 
-def draw_punpayut_landmarks(frame: np.ndarray, landmarks) -> np.ndarray:
-    """Dibuja sobre el frame los landmarks y conexiones estimados por MediaPipe Pose."""
-    if not landmarks:
+def draw_punpayut_landmarks(
+    frame: np.ndarray,
+    landmarks
+) -> np.ndarray:
+    """Dibuja los landmarks corporales estimados por MediaPipe Tasks."""
+
+    if landmarks is None:
         return frame
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
     mp_drawing.draw_landmarks(
-        frame_rgb,
-        landmarks,
-        mp_pose.POSE_CONNECTIONS,
-        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+        image=frame,
+        landmark_list=landmarks.landmark,
+        connections=mp_pose_connections,
+        landmark_drawing_spec=(
+            mp_drawing_styles.get_default_pose_landmarks_style()
+        ),
     )
-    return cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+    return frame
 
 
 def draw_hud_and_telemetry(frame: np.ndarray, result, fps: float, confirm_sec: float) -> np.ndarray:
@@ -125,7 +134,13 @@ def draw_hud_and_telemetry(frame: np.ndarray, result, fps: float, confirm_sec: f
     return frame
 
 
-def run_pipeline(source):
+def run_pipeline(
+    source,
+    vision_only=False,
+    no_telegram=False,
+    width=640,
+    height=480
+):
     """
     Ejecuta el pipeline integrado de visión, voz y alertas.
 
@@ -133,8 +148,20 @@ def run_pipeline(source):
     El ciclo principal procesa comandos de voz, ejecuta el detector y genera
     alertas cuando corresponde.
     """
-    is_webcam = str(source).isdigit() or source == "0"
-    cap = cv2.VideoCapture(int(source) if is_webcam else source)
+    is_webcam = str(source).isdigit()
+
+    if is_webcam:
+        cap = cv2.VideoCapture(int(source), cv2.CAP_V4L2)
+
+        cap.set(
+            cv2.CAP_PROP_FOURCC,
+            cv2.VideoWriter_fourcc(*"MJPG")
+        )
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+    else:
+        cap = cv2.VideoCapture(source)
 
     if not cap.isOpened():
         print(f"❌ Error al abrir la fuente: {source}")
@@ -152,21 +179,44 @@ def run_pipeline(source):
         config=config
     )
 
-    alert_mgr = AlertManager(
-        bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
-        chat_id=os.getenv("TELEGRAM_CHAT_ID"),
-        cooldown_sec=20.0,
-        evidence_dir="evidences"
-    )
+    alert_mgr = None
+    voice_mgr = None
 
-    voice_mgr = VoiceManager(model_path="models/vosk-model-es")
-    voice_mgr.start()
+    # Telegram solo se inicializa cuando está permitido.
+    if not vision_only and not no_telegram:
+        alert_mgr = AlertManager(
+            bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
+            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            cooldown_sec=20.0,
+            evidence_dir="evidences"
+        )
+
+    # Vosk funciona independientemente de Telegram.
+    if not vision_only:
+        voice_mgr = VoiceManager(
+            model_path="models/vosk-model-es"
+        )
+        voice_mgr.start()
 
     print("\n" + "=" * 65)
     print("🚀 PIPELINE ROBÓTICO: Detección Visual + Alertas + Control por Voz")
     print(f"📹 Origen: {'Webcam (' + str(source) + ')' if is_webcam else Path(source).name}")
-    print(f"🤖 Despacho Telegram: {'CONFIGURADO (.env)' if alert_mgr.bot_token else 'DESACTIVADO'}")
-    print("🎙️ Interacción de Voz: INICIANDO EN SEGUNDO PLANO")
+
+    if alert_mgr is None:
+        print("🤖 Despacho Telegram: DESACTIVADO")
+    else:
+        estado_telegram = (
+            "CONFIGURADO (.env)"
+            if alert_mgr.bot_token
+            else "SIN CREDENCIALES"
+        )
+        print(f"🤖 Despacho Telegram: {estado_telegram}")
+
+    if voice_mgr is None:
+        print("🎙️ Interacción de Voz: DESACTIVADA")
+    else:
+        print("🎙️ Interacción de Voz: INICIANDO EN SEGUNDO PLANO")
+
     print("Controles: 'Q' o 'ESC' para salir | 'R' para resetear")
     print("=" * 65 + "\n")
 
@@ -184,14 +234,21 @@ def run_pipeline(source):
             prev_time = now
 
             # 1. Monitoreo de comandos de voz no-bloqueante
-            voice_cmd = voice_mgr.get_next_command()
+            voice_cmd = (
+                voice_mgr.get_next_command()
+                if voice_mgr is not None
+                else None
+            )
             
             if voice_cmd == VoiceCommand.CANCELAR:
                 print("🛑 [Interrupción por Voz] Comando de CANCELACIÓN recibido.")
-
                 if (
-                    result is not None
-                    and result.state in (FallState.CONFIRMANDO, FallState.CAIDA_CONFIRMADA)
+                    alert_mgr is not None
+                    and result is not None
+                    and result.state in (
+                        FallState.CONFIRMANDO,
+                        FallState.CAIDA_CONFIRMADA
+                    )
                 ):
                     msg_cancel = (
                         "✅ *ALERTA CANCELADA*\n"
@@ -207,15 +264,18 @@ def run_pipeline(source):
                 detector.reset()
             
             elif voice_cmd == VoiceCommand.EMERGENCIA:
-                print("🚨 [Interrupción por Voz] Comando de AYUDA recibido. Forzando alerta.")
-                # Disparo inmediato sin importar la cámara
-                alert_mgr.trigger_fall_alert(
-                    frame_bgr=frame,
-                    fall_confidence=1.0,
-                    torso_angle=0.0,
-                    time_in_fall=0.0,
-                    emergency_by_voice=True
-                )
+                print("🚨 [Voz] Comando de EMERGENCIA recibido.")
+
+                if alert_mgr is not None:
+                    alert_mgr.trigger_fall_alert(
+                        frame_bgr=frame,
+                        fall_confidence=1.0,
+                        torso_angle=0.0,
+                        time_in_fall=0.0,
+                        emergency_by_voice=True
+                    )
+                else:
+                    print("🧪 [Prueba] Telegram desactivado: alerta no enviada.")
 
             # 2. Procesamiento de Visión
             result = detector.process_frame(frame, current_timestamp=now)
@@ -224,7 +284,7 @@ def run_pipeline(source):
             display_frame = draw_hud_and_telemetry(annotated, result, fps, detector.cfg.confirmation_time_sec)
 
             # 3. Disparo de Alerta Visual
-            if result.state == FallState.CAIDA_CONFIRMADA:
+            if result.state == FallState.CAIDA_CONFIRMADA and alert_mgr is not None:
                 alert_mgr.trigger_fall_alert(
                     frame_bgr=display_frame,
                     fall_confidence=result.fall_confidence,
@@ -244,13 +304,57 @@ def run_pipeline(source):
         print("\nApagando sistema de forma segura...")
         cap.release()
         cv2.destroyAllWindows()
-        alert_mgr.shutdown()
-        voice_mgr.stop()
+        if alert_mgr is not None:
+            alert_mgr.shutdown()
+
+        if voice_mgr is not None:
+            voice_mgr.stop()
+
+        detector.close()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pipeline Principal Integrado")
-    parser.add_argument("--source", type=str, default="0", help="0 para Webcam o ruta al video .mp4")
+    parser = argparse.ArgumentParser(
+        description="Pipeline Principal Integrado"
+    )
+
+    parser.add_argument(
+        "--source",
+        type=str,
+        default="0",
+        help="0 para webcam o ruta a video"
+    )
+
+    parser.add_argument(
+        "--vision-only",
+        action="store_true",
+        help="Ejecuta solo visión, sin voz ni Telegram"
+    )
+
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=640
+    )
+
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=480
+    )
+
+    parser.add_argument(
+        "--no-telegram",
+        action="store_true",
+        help="Activa visión y voz sin enviar alertas Telegram"
+    )
+
     args = parser.parse_args()
 
-    run_pipeline(source=args.source)
+    run_pipeline(
+        source=args.source,
+        vision_only=args.vision_only,
+        no_telegram=args.no_telegram,
+        width=args.width,
+        height=args.height
+    )

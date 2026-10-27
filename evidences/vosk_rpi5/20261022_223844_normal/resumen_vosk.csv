@@ -1,0 +1,6 @@
+﻿distancia_m,n,frases_exactas,frases_exactas_pct,acciones_correctas,acciones_correctas_pct
+0.5,10,10,100.00,10,100.00
+1,10,10,100.00,10,100.00
+3,10,9,90.00,9,90.00
+5,10,7,70.00,7,70.00
+TOTAL,40,36,90.00,36,90.00

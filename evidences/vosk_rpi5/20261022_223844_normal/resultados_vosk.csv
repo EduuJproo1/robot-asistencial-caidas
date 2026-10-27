@@ -1,0 +1,41 @@
+﻿condicion,distancia_m,numero,frase_esperada,accion_esperada,transcripcion_en_vivo,transcripcion_solo_al_cerrar,accion_detectada,frase_exacta_correcta,accion_correcta,primer_resultado_desde_inicio_s,tiempo_procesamiento_vosk_s,duracion_grabacion_s,archivo_audio
+normal,0.5,1,ayuda,EMERGENCIA,ayuda,,EMERGENCIA,1,1,4.022,0.4863,6.016,audios/0_5m/01_ayuda.wav
+normal,0.5,2,emergencia,EMERGENCIA,emergencia,,EMERGENCIA,1,1,3.761,0.3961,6.013,audios/0_5m/02_emergencia.wav
+normal,0.5,3,socorro,EMERGENCIA,socorro,,EMERGENCIA,1,1,3.761,0.4213,6.013,audios/0_5m/03_socorro.wav
+normal,0.5,4,llamar,EMERGENCIA,llamar,,EMERGENCIA,1,1,3.011,0.3704,6.014,audios/0_5m/04_llamar.wav
+normal,0.5,5,auxilio,EMERGENCIA,auxilio,,EMERGENCIA,1,1,4.016,0.3635,6.018,audios/0_5m/05_auxilio.wav
+normal,0.5,6,estoy bien,CANCELAR,estoy bien,,CANCELAR,1,1,4.019,0.3747,6.016,audios/0_5m/06_estoy_bien.wav
+normal,0.5,7,falsa alarma,CANCELAR,falsa alarma,,CANCELAR,1,1,4.017,0.4193,6.018,audios/0_5m/07_falsa_alarma.wav
+normal,0.5,8,cancelar,CANCELAR,cancelar,,CANCELAR,1,1,3.761,0.4475,6.013,audios/0_5m/08_cancelar.wav
+normal,0.5,9,detente,CANCELAR,detente,,CANCELAR,1,1,3.759,0.4185,6.011,audios/0_5m/09_detente.wav
+normal,0.5,10,me equivoqué,CANCELAR,me equivoqué,,CANCELAR,1,1,3.762,0.3935,6.013,audios/0_5m/10_me_equivoqué.wav
+normal,1,1,ayuda,EMERGENCIA,ayuda,,EMERGENCIA,1,1,3.513,0.3662,6.012,audios/1m/01_ayuda.wav
+normal,1,2,emergencia,EMERGENCIA,emergencia,,EMERGENCIA,1,1,3.761,0.3871,6.013,audios/1m/02_emergencia.wav
+normal,1,3,socorro,EMERGENCIA,socorro,,EMERGENCIA,1,1,3.512,0.4505,6.012,audios/1m/03_socorro.wav
+normal,1,4,llamar,EMERGENCIA,llamar,,EMERGENCIA,1,1,3.011,0.3714,6.013,audios/1m/04_llamar.wav
+normal,1,5,auxilio,EMERGENCIA,auxilio,,EMERGENCIA,1,1,3.76,0.393,6.013,audios/1m/05_auxilio.wav
+normal,1,6,estoy bien,CANCELAR,estoy bien,,CANCELAR,1,1,3.514,0.3669,6.013,audios/1m/06_estoy_bien.wav
+normal,1,7,falsa alarma,CANCELAR,falsa alarma,,CANCELAR,1,1,4.017,0.4765,6.018,audios/1m/07_falsa_alarma.wav
+normal,1,8,cancelar,CANCELAR,cancelar,,CANCELAR,1,1,3.262,0.4827,6.012,audios/1m/08_cancelar.wav
+normal,1,9,detente,CANCELAR,detente,,CANCELAR,1,1,4.017,0.3999,6.022,audios/1m/09_detente.wav
+normal,1,10,me equivoqué,CANCELAR,me equivoqué,,CANCELAR,1,1,3.76,0.4211,6.02,audios/1m/10_me_equivoqué.wav
+normal,3,1,ayuda,EMERGENCIA,ayuda,,EMERGENCIA,1,1,4.034,0.3809,6.018,audios/3m/01_ayuda.wav
+normal,3,2,emergencia,EMERGENCIA,emergencia,,EMERGENCIA,1,1,5.011,0.4325,6.015,audios/3m/02_emergencia.wav
+normal,3,3,socorro,EMERGENCIA,socorro,,EMERGENCIA,1,1,5.011,0.4332,6.015,audios/3m/03_socorro.wav
+normal,3,4,llamar,EMERGENCIA,llama,,DESCONOCIDO,0,0,4.766,0.4349,6.012,audios/3m/04_llamar.wav
+normal,3,5,auxilio,EMERGENCIA,auxilio,,EMERGENCIA,1,1,5.514,0.4302,6.011,audios/3m/05_auxilio.wav
+normal,3,6,estoy bien,CANCELAR,estoy bien,,CANCELAR,1,1,5.265,0.3773,6.012,audios/3m/06_estoy_bien.wav
+normal,3,7,falsa alarma,CANCELAR,falsa alarma,,CANCELAR,1,1,5.265,0.6193,6.013,audios/3m/07_falsa_alarma.wav
+normal,3,8,cancelar,CANCELAR,cancelar,,CANCELAR,1,1,4.066,0.4269,6.018,audios/3m/08_cancelar.wav
+normal,3,9,detente,CANCELAR,detente,,CANCELAR,1,1,5.016,0.4397,6.02,audios/3m/09_detente.wav
+normal,3,10,me equivoqué,CANCELAR,me equivoqué,,CANCELAR,1,1,5.012,0.5062,6.016,audios/3m/10_me_equivoqué.wav
+normal,5,1,ayuda,EMERGENCIA,ayuda,,EMERGENCIA,1,1,4.039,0.3466,6.017,audios/5m/01_ayuda.wav
+normal,5,2,emergencia,EMERGENCIA,emergencia,,EMERGENCIA,1,1,5.016,0.4179,6.013,audios/5m/02_emergencia.wav
+normal,5,3,socorro,EMERGENCIA,socorro,,EMERGENCIA,1,1,5.269,0.3777,6.012,audios/5m/03_socorro.wav
+normal,5,4,llamar,EMERGENCIA,llamar,,EMERGENCIA,1,1,5.519,0.4342,6.012,audios/5m/04_llamar.wav
+normal,5,5,auxilio,EMERGENCIA,auxilio,,EMERGENCIA,1,1,5.262,0.4375,6.012,audios/5m/05_auxilio.wav
+normal,5,6,estoy bien,CANCELAR,estoy bien,,CANCELAR,1,1,6.021,0.41,6.021,audios/5m/06_estoy_bien.wav
+normal,5,7,falsa alarma,CANCELAR,,,DESCONOCIDO,0,0,,0.4026,6.012,audios/5m/07_falsa_alarma.wav
+normal,5,8,cancelar,CANCELAR,cancelar,,CANCELAR,1,1,5.285,0.399,6.012,audios/5m/08_cancelar.wav
+normal,5,9,detente,CANCELAR,eh,,DESCONOCIDO,0,0,5.269,0.4773,6.009,audios/5m/09_detente.wav
+normal,5,10,me equivoqué,CANCELAR,bello,,DESCONOCIDO,0,0,5.274,0.4771,6.012,audios/5m/10_me_equivoqué.wav
